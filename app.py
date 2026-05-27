@@ -48,28 +48,32 @@ if exp_df is None:
     exp_df = pd.DataFrame()
 
 # =========================
-# SAFE CLEANUP (IMPORTANT)
+# GLOBAL CLEAN (IMPORTANT FIX)
 # =========================
 df = df.drop(columns=["TenantID"], errors="ignore")
 
-# force numeric
 if "Rental" in df.columns:
     df["Rental"] = pd.to_numeric(df["Rental"], errors="coerce").fillna(0)
 
 # =========================
-# EXPENSE CLEANER (STRICT SCHEMA)
+# EXPENSE CLEAN + FIX HOUSE BUG
 # =========================
 def clean_expenses(df_in):
     if df_in is None:
-        return pd.DataFrame(columns=["Category", "Amount", "Status"])
+        return pd.DataFrame(columns=["House", "Category", "Amount", "Status"])
 
     df = df_in.copy()
 
-    for col in ["Category", "Amount", "Status"]:
+    for col in ["House", "Category", "Amount", "Status"]:
         if col not in df.columns:
-            df[col] = "OTHER EXPENSES" if col == "Category" else 0 if col == "Amount" else "Unpaid"
-
-    df = df[["Category", "Amount", "Status"]]
+            if col == "House":
+                df[col] = ""
+            elif col == "Category":
+                df[col] = "OTHER EXPENSES"
+            elif col == "Amount":
+                df[col] = 0
+            else:
+                df[col] = "Unpaid"
 
     df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce").fillna(0)
     df["Status"] = df["Status"].apply(lambda x: "Paid" if str(x).lower() == "paid" else "Unpaid")
@@ -131,16 +135,14 @@ if page == "Houses":
     selected_house = st.sidebar.selectbox("Select House", houses)
 
 # =========================
-# FILTER
+# FILTER DATA
 # =========================
 if selected_house:
     df_view = df[df["House"] == selected_house].copy()
+    exp_view = exp_df[exp_df["House"] == selected_house].copy()
 else:
     df_view = df.copy()
-
-# remove TenantID globally from display
-def clean_tenant(df_in):
-    return df_in.drop(columns=["TenantID"], errors="ignore")
+    exp_view = exp_df.copy()
 
 # =========================
 # KPI
@@ -153,14 +155,17 @@ def kpi(label, value):
     </div>
     """, unsafe_allow_html=True)
 
+def clean_tenant(df_in):
+    return df_in.drop(columns=["TenantID"], errors="ignore")
+
 # =========================
 # DASHBOARD
 # =========================
 if page == "Dashboard":
     st.title("🏠 Dashboard")
 
-    income = df["Rental"].sum() if not df.empty else 0
-    expense = exp_df["Amount"].sum() if not exp_df.empty else 0
+    income = pd.to_numeric(df.get("Rental", 0), errors="coerce").fillna(0).sum()
+    expense = exp_df["Amount"].sum()
 
     c1, c2, c3 = st.columns(3)
     kpi("Income", f"RM {income:,.0f}")
@@ -219,11 +224,12 @@ elif selected_house:
     ]
 
     edited_exp = st.data_editor(
-        exp_df,
+        exp_view,
         num_rows="dynamic",
         use_container_width=True,
         key="expense_editor",
         column_config={
+            "House": None,
             "Category": st.column_config.SelectboxColumn(
                 "Category",
                 options=CATEGORY_OPTIONS,
@@ -238,13 +244,20 @@ elif selected_house:
     )
 
     if st.button("💾 Save Expenses"):
-        exp_saved = clean_expenses(edited_exp)
-        save_expenses(exp_saved)
+        edited_exp = clean_expenses(edited_exp)
+
+        # 🔥 FIX IMPORTANT: attach house back (avoid global overwrite bug)
+        edited_exp["House"] = selected_house
+
+        exp_updated = exp_df[exp_df["House"] != selected_house]
+        exp_updated = pd.concat([exp_updated, edited_exp], ignore_index=True)
+
+        save_expenses(exp_updated)
         st.success("Saved")
         st.rerun()
 
 # =========================
-# REPORTS (FIXED)
+# REPORTS
 # =========================
 elif page == "Reports":
     st.title("📊 Reports")
@@ -253,12 +266,16 @@ elif page == "Reports":
     st.dataframe(clean_tenant(df), use_container_width=True)
 
     st.subheader("💸 Expenses Report")
-    st.dataframe(exp_df, use_container_width=True)
+
+    # FIXED: proper mapping only 4 columns
+    exp_report = exp_df[["House", "Category", "Amount", "Status"]]
+
+    st.dataframe(exp_report, use_container_width=True)
 
     st.subheader("📊 Summary")
 
-    income = df["Rental"].sum() if not df.empty else 0
-    expense = exp_df["Amount"].sum() if not exp_df.empty else 0
+    income = pd.to_numeric(df.get("Rental", 0), errors="coerce").fillna(0).sum()
+    expense = exp_df["Amount"].sum()
 
     st.metric("Income", f"RM {income:,.0f}")
     st.metric("Expenses", f"RM {expense:,.0f}")
