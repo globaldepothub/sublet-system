@@ -6,12 +6,12 @@ from db import load_data, save_data, load_expenses, save_expenses
 st.set_page_config(page_title="Sublet SaaS Pro MAX", layout="wide")
 
 # =========================
-# MOBILE-FIRST STYLE
+# MOBILE UI STYLE
 # =========================
 st.markdown("""
 <style>
 .main { background: #0a0f1c; }
-.block-container { padding: 1rem 1rem; }
+.block-container { padding: 1rem; }
 
 section[data-testid="stSidebar"] {
     background: #0b1220;
@@ -28,7 +28,11 @@ h1,h2,h3 { color:#e5e7eb; }
     text-align: center;
 }
 
-.kpi-value { font-size:20px; font-weight:700; color:#fff; }
+.kpi-value {
+    font-size:20px;
+    font-weight:700;
+    color:#fff;
+}
 
 hr { border:1px solid #1f2937; }
 </style>
@@ -43,6 +47,7 @@ today = datetime.today()
 
 if df is None:
     df = pd.DataFrame()
+
 if exp_df is None:
     exp_df = pd.DataFrame()
 
@@ -77,7 +82,7 @@ if user != "admin" or pw != "admin123":
     st.stop()
 
 # =========================
-# HOUSE SYSTEM (MOBILE STYLE)
+# HOUSE SYSTEM
 # =========================
 default_houses = [
     "BSS",
@@ -93,15 +98,11 @@ default_houses = [
 houses = sorted(list(set(default_houses + df["House"].dropna().tolist())))
 
 # =========================
-# NAVIGATION (CLEAN MOBILE STYLE)
+# NAVIGATION
 # =========================
-page = st.sidebar.selectbox(
-    "Navigation",
-    ["Dashboard", "Reports", "Houses"]
-)
+page = st.sidebar.selectbox("Navigation", ["Dashboard", "Reports", "Houses"])
 
 selected_house = None
-
 if page == "Houses":
     selected_house = st.sidebar.selectbox("Select House", houses)
 
@@ -144,11 +145,10 @@ if page == "Dashboard":
     kpi("Profit", f"RM {income-expense:,.0f}")
 
     st.markdown("---")
-
     st.dataframe(df, use_container_width=True, height=400)
 
 # =========================
-# HOUSE PAGE (MOBILE NOTION STYLE)
+# HOUSE PAGE (TENANTS + EXPENSES)
 # =========================
 elif selected_house:
     st.title(f"🏘️ {selected_house}")
@@ -191,18 +191,45 @@ elif selected_house:
     st.markdown("---")
 
     # =========================
-    # EXPENSES
+    # EXPENSES (UPDATED STRUCTURE)
     # =========================
     st.subheader("💸 Expenses")
+
+    CATEGORY_OPTIONS = [
+        "TNB",
+        "IWK",
+        "RENTAL",
+        "AIR SELANGORKU",
+        "WIFI",
+        "COWAY",
+        "OTHER EXPENSES"
+    ]
+
+    if exp_view.empty:
+        exp_view = pd.DataFrame(columns=["Category", "Amount", "Status", "House"])
 
     edited_exp = st.data_editor(
         exp_view,
         num_rows="dynamic",
         use_container_width=True,
-        key="expense_editor"
+        key="expense_editor",
+        column_config={
+            "Category": st.column_config.SelectboxColumn(
+                "Category",
+                options=CATEGORY_OPTIONS,
+                required=True
+            ),
+            "Status": st.column_config.SelectboxColumn(
+                "Status",
+                options=["PAID", "UNPAID"],
+                required=True
+            )
+        }
     )
 
     if st.button("💾 Save Expenses"):
+        edited_exp["House"] = selected_house
+
         exp_df = exp_df[exp_df["House"] != selected_house]
         exp_df = pd.concat([exp_df, edited_exp], ignore_index=True)
 
