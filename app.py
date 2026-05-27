@@ -6,7 +6,7 @@ from db import load_data, save_data, load_expenses, save_expenses
 st.set_page_config(page_title="Sublet SaaS Pro MAX", layout="wide")
 
 # =========================
-# STYLE (MOBILE CLEAN)
+# STYLE
 # =========================
 st.markdown("""
 <style>
@@ -43,12 +43,16 @@ today = datetime.today()
 
 if df is None:
     df = pd.DataFrame()
-
 if exp_df is None:
     exp_df = pd.DataFrame()
 
 if "House" not in df.columns:
     df["House"] = ""
+
+# =========================
+# REMOVE TenantID COMPLETELY (GLOBAL SAFETY FIX)
+# =========================
+df = df.drop(columns=["TenantID"], errors="ignore")
 
 # =========================
 # STATUS ENGINE
@@ -127,7 +131,13 @@ def kpi(label, value):
     """, unsafe_allow_html=True)
 
 # =========================
-# DASHBOARD
+# CLEAN DISPLAY FUNCTION (IMPORTANT FIX)
+# =========================
+def clean_tenant_df(df_in):
+    return df_in.drop(columns=["TenantID", "House"], errors="ignore")
+
+# =========================
+# DASHBOARD (FIXED)
 # =========================
 if page == "Dashboard":
     st.title("🏠 Dashboard")
@@ -141,7 +151,9 @@ if page == "Dashboard":
     kpi("Profit", f"RM {income-expense:,.0f}")
 
     st.markdown("---")
-    st.dataframe(df, use_container_width=True)
+
+    # ✅ FIX: no TenantID shown anymore
+    st.dataframe(clean_tenant_df(df), use_container_width=True)
 
 # =========================
 # HOUSE PAGE
@@ -149,12 +161,9 @@ if page == "Dashboard":
 elif selected_house:
     st.title(f"🏘️ {selected_house}")
 
-    # =========================
-    # TENANTS (NO Tenant ID + NO House COLUMN)
-    # =========================
     st.subheader("👥 Tenants")
 
-    df_clean = df_view.drop(columns=["House", "TenantID"], errors="ignore")
+    df_clean = clean_tenant_df(df_view)
 
     edited_df = st.data_editor(
         df_clean,
@@ -173,45 +182,32 @@ elif selected_house:
     if st.button("💾 Save Tenants"):
         edited_df["House"] = selected_house
 
-        df = df[df["House"] != selected_house]
-        df = pd.concat([df, edited_df], ignore_index=True)
+        df_updated = df[df["House"] != selected_house]
+        df_updated = pd.concat([df_updated, edited_df], ignore_index=True)
 
-        df["Status"] = df["Status"].apply(
+        df_updated["Status"] = df_updated["Status"].apply(
             lambda x: "Paid" if str(x).lower() == "paid" else "Unpaid"
         )
 
-        save_data(df)
+        save_data(df_updated)
         st.success("Saved")
         st.rerun()
 
     st.markdown("---")
 
-    # =========================
-    # EXPENSES (STRICT 3 COLUMNS ONLY)
-    # =========================
     st.subheader("💸 Expenses")
 
     CATEGORY_OPTIONS = [
-        "TNB",
-        "IWK",
-        "RENTAL",
-        "AIR SELANGORKU",
-        "WIFI",
-        "COWAY",
-        "OTHER EXPENSES"
+        "TNB", "IWK", "RENTAL",
+        "AIR SELANGORKU", "WIFI",
+        "COWAY", "OTHER EXPENSES"
     ]
 
     exp_clean = exp_view.copy()
 
-    # enforce schema ONLY 3 columns
     for col in ["Category", "Amount", "Status"]:
         if col not in exp_clean.columns:
-            if col == "Category":
-                exp_clean[col] = "OTHER EXPENSES"
-            elif col == "Amount":
-                exp_clean[col] = 0
-            elif col == "Status":
-                exp_clean[col] = "Unpaid"
+            exp_clean[col] = "OTHER EXPENSES" if col == "Category" else 0 if col == "Amount" else "Unpaid"
 
     exp_clean = exp_clean[["Category", "Amount", "Status"]]
 
@@ -235,24 +231,21 @@ elif selected_house:
     )
 
     if st.button("💾 Save Expenses"):
-        exp_df = edited_exp.copy()
+        exp_saved = edited_exp.copy()
 
-        exp_df["Status"] = exp_df["Status"].apply(
+        exp_saved["Status"] = exp_saved["Status"].apply(
             lambda x: "Paid" if str(x).lower() == "paid" else "Unpaid"
         )
 
-        save_expenses(exp_df)
+        save_expenses(exp_saved)
         st.success("Saved")
         st.rerun()
 
 # =========================
-# REPORTS
+# REPORTS (FIXED)
 # =========================
 elif page == "Reports":
     st.title("📊 Reports")
 
-    # REMOVE TenantID everywhere
-    df_report = df.drop(columns=["TenantID"], errors="ignore")
-
-    st.dataframe(df_report, use_container_width=True)
+    st.dataframe(clean_tenant_df(df), use_container_width=True)
     st.dataframe(exp_df, use_container_width=True)
