@@ -4,29 +4,37 @@ import pandas as pd
 engine = create_engine("sqlite:///data/sublet.db")
 
 # =========================
+# TABLE SCHEMAS (CENTRALIZED)
+# =========================
+TENANT_COLUMNS = [
+    "TenantID","Name","House","Room","Rental","DueDate","Status"
+]
+
+EXPENSE_COLUMNS = [
+    "Date","House","Category","Description","Amount"
+]
+
+# =========================
 # INIT TENANTS TABLE
 # =========================
 def init_db():
-    df = pd.DataFrame(columns=[
-        "TenantID","Name","House","Room","Rental","DueDate","Status"
-    ])
+    df = pd.DataFrame(columns=TENANT_COLUMNS)
     df.to_sql("tenants", engine, if_exists="replace", index=False)
 
 # =========================
-# LOAD TENANTS DATA (SAFE)
+# LOAD TENANTS (SAFE)
 # =========================
 def load_data():
     try:
-        return pd.read_sql("tenants", engine)
+        df = pd.read_sql("tenants", engine)
+        return df
     except:
-        df = pd.DataFrame(columns=[
-            "TenantID","Name","House","Room","Rental","DueDate","Status"
-        ])
+        df = pd.DataFrame(columns=TENANT_COLUMNS)
         df.to_sql("tenants", engine, if_exists="replace", index=False)
         return df
 
 # =========================
-# SAVE TENANTS DATA
+# SAVE TENANTS
 # =========================
 def save_data(df):
     df.to_sql("tenants", engine, if_exists="replace", index=False)
@@ -35,34 +43,23 @@ def save_data(df):
 # INIT EXPENSES TABLE
 # =========================
 def init_expenses():
-    df = pd.DataFrame(columns=[
-        "Date",
-        "House",
-        "Category",
-        "Description",
-        "Amount"
-    ])
+    df = pd.DataFrame(columns=EXPENSE_COLUMNS)
     df.to_sql("expenses", engine, if_exists="replace", index=False)
 
 # =========================
-# LOAD EXPENSES DATA (SAFE)
+# LOAD EXPENSES (SAFE)
 # =========================
 def load_expenses():
     try:
-        return pd.read_sql("expenses", engine)
+        df = pd.read_sql("expenses", engine)
+        return df
     except:
-        df = pd.DataFrame(columns=[
-            "Date",
-            "House",
-            "Category",
-            "Description",
-            "Amount"
-        ])
+        df = pd.DataFrame(columns=EXPENSE_COLUMNS)
         df.to_sql("expenses", engine, if_exists="replace", index=False)
         return df
 
 # =========================
-# SAVE EXPENSES DATA (MISSING BEFORE)
+# SAVE EXPENSES
 # =========================
 def save_expenses(df):
     df.to_sql("expenses", engine, if_exists="replace", index=False)
