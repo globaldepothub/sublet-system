@@ -47,38 +47,31 @@ if df is None:
 if exp_df is None:
     exp_df = pd.DataFrame()
 
-# =========================
-# GLOBAL CLEAN (IMPORTANT FIX)
-# =========================
 df = df.drop(columns=["TenantID"], errors="ignore")
 
-if "Rental" in df.columns:
-    df["Rental"] = pd.to_numeric(df["Rental"], errors="coerce").fillna(0)
+# =========================
+# ENSURE HOUSE IN EXPENSES (IMPORTANT FIX)
+# =========================
+if "House" not in exp_df.columns:
+    exp_df["House"] = ""
 
 # =========================
-# EXPENSE CLEAN + FIX HOUSE BUG
+# CLEAN EXPENSES
 # =========================
 def clean_expenses(df_in):
-    if df_in is None:
-        return pd.DataFrame(columns=["House", "Category", "Amount", "Status"])
-
     df = df_in.copy()
 
-    for col in ["House", "Category", "Amount", "Status"]:
+    if "House" not in df.columns:
+        df["House"] = ""
+
+    for col in ["Category", "Amount", "Status"]:
         if col not in df.columns:
-            if col == "House":
-                df[col] = ""
-            elif col == "Category":
-                df[col] = "OTHER EXPENSES"
-            elif col == "Amount":
-                df[col] = 0
-            else:
-                df[col] = "Unpaid"
+            df[col] = "OTHER EXPENSES" if col=="Category" else 0 if col=="Amount" else "Unpaid"
 
     df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce").fillna(0)
-    df["Status"] = df["Status"].apply(lambda x: "Paid" if str(x).lower() == "paid" else "Unpaid")
+    df["Status"] = df["Status"].apply(lambda x: "Paid" if str(x).lower()=="paid" else "Unpaid")
 
-    return df
+    return df[["House","Category","Amount","Status"]]
 
 exp_df = clean_expenses(exp_df)
 
@@ -87,7 +80,7 @@ exp_df = clean_expenses(exp_df)
 # =========================
 def status(row):
     try:
-        if str(row.get("Status", "")).lower() == "paid":
+        if str(row.get("Status","")).lower() == "paid":
             return "Paid"
         elif pd.to_datetime(row["DueDate"]) < today:
             return "Overdue"
@@ -113,21 +106,13 @@ if user != "admin" or pw != "admin123":
 # HOUSE SYSTEM
 # =========================
 default_houses = [
-    "BSS",
-    "PUNCAK 7 17-06",
-    "PUNCAK 7 21-05",
-    "PUNCAK 7 09-07",
-    "KRISTAL VIEW B-12-9",
-    "MUTIARA ANGGERIK A-4-1",
-    "PRIMA U1 1-21-8",
-    "ALAM SANJUNG A-16-11"
+    "BSS","PUNCAK 7 17-06","PUNCAK 7 21-05","PUNCAK 7 09-07",
+    "KRISTAL VIEW B-12-9","MUTIARA ANGGERIK A-4-1",
+    "PRIMA U1 1-21-8","ALAM SANJUNG A-16-11"
 ]
 
 houses = sorted(list(set(default_houses + df["House"].dropna().tolist())))
 
-# =========================
-# NAVIGATION
-# =========================
 page = st.sidebar.selectbox("Navigation", ["Dashboard", "Reports", "Houses"])
 
 selected_house = None
@@ -135,7 +120,7 @@ if page == "Houses":
     selected_house = st.sidebar.selectbox("Select House", houses)
 
 # =========================
-# FILTER DATA
+# FILTER
 # =========================
 if selected_house:
     df_view = df[df["House"] == selected_house].copy()
@@ -155,25 +140,22 @@ def kpi(label, value):
     </div>
     """, unsafe_allow_html=True)
 
-def clean_tenant(df_in):
-    return df_in.drop(columns=["TenantID"], errors="ignore")
-
 # =========================
 # DASHBOARD
 # =========================
 if page == "Dashboard":
     st.title("🏠 Dashboard")
 
-    income = pd.to_numeric(df.get("Rental", 0), errors="coerce").fillna(0).sum()
-    expense = exp_df["Amount"].sum()
+    income = df["Rental"].sum() if not df.empty else 0
+    expense = exp_df["Amount"].sum() if not exp_df.empty else 0
 
-    c1, c2, c3 = st.columns(3)
+    c1,c2,c3 = st.columns(3)
     kpi("Income", f"RM {income:,.0f}")
     kpi("Expenses", f"RM {expense:,.0f}")
     kpi("Profit", f"RM {income-expense:,.0f}")
 
     st.markdown("---")
-    st.dataframe(clean_tenant(df), use_container_width=True)
+    st.dataframe(df, use_container_width=True)
 
 # =========================
 # HOUSE PAGE
@@ -183,7 +165,7 @@ elif selected_house:
 
     st.subheader("👥 Tenants")
 
-    df_clean = clean_tenant(df_view)
+    df_clean = df_view.drop(columns=["House"], errors="ignore")
 
     edited_df = st.data_editor(
         df_clean,
@@ -193,8 +175,7 @@ elif selected_house:
         column_config={
             "Status": st.column_config.SelectboxColumn(
                 "Status",
-                options=["Paid", "Unpaid"],
-                required=True
+                options=["Paid","Unpaid"]
             )
         }
     )
@@ -202,25 +183,24 @@ elif selected_house:
     if st.button("💾 Save Tenants"):
         edited_df["House"] = selected_house
 
-        df_updated = df[df["House"] != selected_house]
-        df_updated = pd.concat([df_updated, edited_df], ignore_index=True)
+        df_all = df[df["House"] != selected_house]
+        df_all = pd.concat([df_all, edited_df], ignore_index=True)
 
-        df_updated["Status"] = df_updated["Status"].apply(
-            lambda x: "Paid" if str(x).lower() == "paid" else "Unpaid"
-        )
-
-        save_data(df_updated)
+        save_data(df_all)
         st.success("Saved")
         st.rerun()
 
     st.markdown("---")
 
+    # =========================
+    # EXPENSES FIXED (CORE ISSUE RESOLVED)
+    # =========================
     st.subheader("💸 Expenses")
 
     CATEGORY_OPTIONS = [
-        "TNB", "IWK", "RENTAL",
-        "AIR SELANGORKU", "WIFI",
-        "COWAY", "OTHER EXPENSES"
+        "TNB","IWK","RENTAL",
+        "AIR SELANGORKU","WIFI",
+        "COWAY","OTHER EXPENSES"
     ]
 
     edited_exp = st.data_editor(
@@ -229,30 +209,24 @@ elif selected_house:
         use_container_width=True,
         key="expense_editor",
         column_config={
-            "House": None,
             "Category": st.column_config.SelectboxColumn(
                 "Category",
-                options=CATEGORY_OPTIONS,
-                required=True
+                options=CATEGORY_OPTIONS
             ),
             "Status": st.column_config.SelectboxColumn(
                 "Status",
-                options=["Paid", "Unpaid"],
-                required=True
+                options=["Paid","Unpaid"]
             )
         }
     )
 
     if st.button("💾 Save Expenses"):
-        edited_exp = clean_expenses(edited_exp)
+        edited_exp["House"] = selected_house   # 🔥 CRITICAL FIX
 
-        # 🔥 FIX IMPORTANT: attach house back (avoid global overwrite bug)
-        edited_exp["House"] = selected_house
+        exp_all = exp_df[exp_df["House"] != selected_house]
+        exp_all = pd.concat([exp_all, edited_exp], ignore_index=True)
 
-        exp_updated = exp_df[exp_df["House"] != selected_house]
-        exp_updated = pd.concat([exp_updated, edited_exp], ignore_index=True)
-
-        save_expenses(exp_updated)
+        save_expenses(exp_all)
         st.success("Saved")
         st.rerun()
 
@@ -262,21 +236,5 @@ elif selected_house:
 elif page == "Reports":
     st.title("📊 Reports")
 
-    st.subheader("👥 Tenants Report")
-    st.dataframe(clean_tenant(df), use_container_width=True)
-
-    st.subheader("💸 Expenses Report")
-
-    # FIXED: proper mapping only 4 columns
-    exp_report = exp_df[["House", "Category", "Amount", "Status"]]
-
-    st.dataframe(exp_report, use_container_width=True)
-
-    st.subheader("📊 Summary")
-
-    income = pd.to_numeric(df.get("Rental", 0), errors="coerce").fillna(0).sum()
-    expense = exp_df["Amount"].sum()
-
-    st.metric("Income", f"RM {income:,.0f}")
-    st.metric("Expenses", f"RM {expense:,.0f}")
-    st.metric("Profit", f"RM {income-expense:,.0f}")
+    st.dataframe(df, use_container_width=True)
+    st.dataframe(exp_df, use_container_width=True)
