@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from datetime import datetime
 from db import load_data, save_data, load_expenses, save_expenses
 
@@ -40,12 +41,11 @@ h1, h2, h3 {
     padding: 16px;
     text-align: center;
     box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+    transition: 0.2s ease;
 }
 
-/* KPI hover */
 .kpi:hover {
-    transform: translateY(-2px);
-    transition: 0.2s ease;
+    transform: translateY(-3px);
 }
 
 /* KPI text */
@@ -60,15 +60,14 @@ h1, h2, h3 {
     color: #f8fafc;
 }
 
-/* Section divider */
-hr {
-    border: 1px solid #1f2937;
-}
-
-/* Table radius */
+/* Table */
 div[data-testid="stDataFrame"] {
     border-radius: 12px;
     overflow: hidden;
+}
+
+hr {
+    border: 1px solid #1f2937;
 }
 
 </style>
@@ -82,14 +81,20 @@ exp_df = load_expenses()
 today = datetime.today()
 
 # =========================
-# SAFE STATUS ENGINE
+# SAFE STATUS ENGINE (IMPROVED)
 # =========================
 def status(row):
     try:
-        if str(row.get("Status","")).lower() == "paid":
+        if str(row.get("Status", "")).lower() == "paid":
             return "Paid"
-        elif pd.to_datetime(row["DueDate"]) < today:
+
+        due_date = pd.to_datetime(row.get("DueDate", None), errors="coerce")
+        if pd.isna(due_date):
+            return "Pending"
+
+        if due_date < today:
             return "Overdue"
+
         return "Pending"
     except:
         return "Pending"
@@ -114,23 +119,22 @@ st.sidebar.markdown("---")
 # =========================
 # NAVIGATION
 # =========================
-menu = st.sidebar.radio("Navigation", [
-    "Dashboard",
-    "Tenant",
-    "Expenses",
-    "Reports"
-])
+menu = st.sidebar.radio("Navigation", ["Dashboard", "Tenant", "Expenses", "Reports"])
 
+# =========================
+# FILTER
+# =========================
 houses = df["House"].dropna().unique().tolist() if not df.empty else []
 house_filter = st.sidebar.multiselect("Filter House", houses)
 
-if house_filter:
-    df_view = df[df["House"].isin(house_filter)].copy()
-    exp_view = exp_df[exp_df["House"].isin(house_filter)].copy()
-else:
-    df_view = df.copy()
-    exp_view = exp_df.copy()
+df_view = df.copy()
+exp_view = exp_df.copy()
 
+if house_filter:
+    df_view = df_view[df_view["House"].isin(house_filter)]
+    exp_view = exp_view[exp_view["House"].isin(house_filter)]
+
+# recompute status
 if not df_view.empty:
     df_view["PaymentStatus"] = df_view.apply(status, axis=1)
 
@@ -151,28 +155,21 @@ def kpi(label, value):
 if menu == "Dashboard":
 
     st.title("🏠 Dashboard")
-    st.caption("Overview of rental performance, expenses and profit")
 
     total_income = df_view["Rental"].sum() if not df_view.empty else 0
     collected = df_view[df_view["Status"] == "Paid"]["Rental"].sum() if not df_view.empty else 0
     expenses = exp_view["Amount"].sum() if not exp_view.empty else 0
     profit = total_income - expenses
 
-    # KPI ROW
     c1, c2, c3, c4 = st.columns(4)
 
-    with c1:
-        kpi("Income", f"RM {total_income:,.0f}")
-    with c2:
-        kpi("Collected", f"RM {collected:,.0f}")
-    with c3:
-        kpi("Expenses", f"RM {expenses:,.0f}")
-    with c4:
-        kpi("Net Profit", f"RM {profit:,.0f}")
+    with c1: kpi("Income", f"RM {total_income:,.0f}")
+    with c2: kpi("Collected", f"RM {collected:,.0f}")
+    with c3: kpi("Expenses", f"RM {expenses:,.0f}")
+    with c4: kpi("Net Profit", f"RM {profit:,.0f}")
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    # MAIN GRID
     left, right = st.columns([2.2, 1])
 
     with left:
@@ -190,9 +187,6 @@ if menu == "Dashboard":
             chart_df["Profit"] = chart_df["Income"] - chart_df["Expenses"]
 
             st.bar_chart(chart_df)
-
-        else:
-            st.info("No data available")
 
     with right:
         st.subheader("🚨 Overdue")
@@ -213,7 +207,6 @@ elif menu == "Tenant":
     st.title("👥 Tenant Management")
 
     with st.expander("➕ Add Tenant"):
-
         with st.form("tenant_form"):
             tid = st.text_input("Tenant ID")
             name = st.text_input("Name")
@@ -224,7 +217,6 @@ elif menu == "Tenant":
             status_input = st.selectbox("Status", ["Paid", "Unpaid"])
 
             if st.form_submit_button("Save"):
-
                 new = pd.DataFrame([{
                     "TenantID": tid,
                     "Name": name,
@@ -251,7 +243,6 @@ elif menu == "Expenses":
     st.title("💸 Expenses Tracker")
 
     with st.expander("➕ Add Expense"):
-
         with st.form("expense_form"):
             date = st.date_input("Date")
             house = st.text_input("House")
@@ -262,7 +253,6 @@ elif menu == "Expenses":
             amount = st.number_input("Amount", min_value=0.0)
 
             if st.form_submit_button("Save"):
-
                 new = pd.DataFrame([{
                     "Date": date,
                     "House": house,
@@ -279,20 +269,20 @@ elif menu == "Expenses":
 
     st.dataframe(exp_view, use_container_width=True)
 
-    st.subheader("📊 Breakdown")
-
     if not exp_view.empty:
+        st.subheader("📊 Breakdown")
         st.bar_chart(exp_view.groupby("Category")["Amount"].sum())
 
 # =========================
-# REPORTS (SAAS STYLE TABS)
+# REPORTS
 # =========================
 elif menu == "Reports":
 
     st.title("📊 Reports")
 
     if not df.empty:
-        month_list = pd.to_datetime(df["DueDate"], errors="coerce").dt.month.dropna().unique().tolist()
+        df_dates = pd.to_datetime(df["DueDate"], errors="coerce")
+        month_list = df_dates.dt.month.dropna().unique().tolist()
         month = st.selectbox("Select Month", sorted(month_list))
     else:
         month = None
@@ -306,10 +296,9 @@ elif menu == "Reports":
         expense = monthly_exp["Amount"].sum() if not monthly_exp.empty else 0
 
         c1, c2, c3 = st.columns(3)
-
-        kpi("Income", f"RM {income:,.0f}")
-        kpi("Expenses", f"RM {expense:,.0f}")
-        kpi("Profit", f"RM {income-expense:,.0f}")
+        with c1: kpi("Income", f"RM {income:,.0f}")
+        with c2: kpi("Expenses", f"RM {expense:,.0f}")
+        with c3: kpi("Profit", f"RM {income-expense:,.0f}")
 
         st.markdown("<hr>", unsafe_allow_html=True)
 
