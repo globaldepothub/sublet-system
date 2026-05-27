@@ -6,7 +6,7 @@ from db import load_data, save_data, load_expenses, save_expenses
 st.set_page_config(page_title="Sublet SaaS Pro MAX", layout="wide")
 
 # =========================
-# MOBILE-FIRST STYLE
+# STYLE
 # =========================
 st.markdown("""
 <style>
@@ -43,6 +43,7 @@ today = datetime.today()
 
 if df is None:
     df = pd.DataFrame()
+
 if exp_df is None:
     exp_df = pd.DataFrame()
 
@@ -107,7 +108,7 @@ if page == "Houses":
 # =========================
 if selected_house:
     df_view = df[df["House"] == selected_house].copy()
-    exp_view = exp_df.copy()   # 👈 IMPORTANT: expenses NOT filtered by house anymore
+    exp_view = exp_df.copy()
 else:
     df_view = df.copy()
     exp_view = exp_df.copy()
@@ -135,7 +136,7 @@ if page == "Dashboard":
     income = df["Rental"].sum() if not df.empty else 0
     expense = exp_df["Amount"].sum() if not exp_df.empty else 0
 
-    c1,c2,c3 = st.columns(3)
+    c1, c2, c3 = st.columns(3)
     kpi("Income", f"RM {income:,.0f}")
     kpi("Expenses", f"RM {expense:,.0f}")
     kpi("Profit", f"RM {income-expense:,.0f}")
@@ -187,7 +188,7 @@ elif selected_house:
     st.markdown("---")
 
     # =========================
-    # EXPENSES (UPDATED)
+    # EXPENSES (CLEAN 3 COLUMNS ONLY)
     # =========================
     st.subheader("💸 Expenses")
 
@@ -201,13 +202,20 @@ elif selected_house:
         "OTHER EXPENSES"
     ]
 
-    # enforce clean schema
-    if not exp_view.empty:
-        if "Status" not in exp_view.columns:
-            exp_view["Status"] = "Unpaid"
+    exp_clean = exp_view.copy()
+
+    if "Category" not in exp_clean.columns:
+        exp_clean["Category"] = "OTHER EXPENSES"
+    if "Amount" not in exp_clean.columns:
+        exp_clean["Amount"] = 0
+    if "Status" not in exp_clean.columns:
+        exp_clean["Status"] = "Unpaid"
+
+    # FORCE ONLY 3 COLUMNS
+    exp_clean = exp_clean[["Category", "Amount", "Status"]]
 
     edited_exp = st.data_editor(
-        exp_view,
+        exp_clean,
         num_rows="dynamic",
         use_container_width=True,
         key="expense_editor",
@@ -226,9 +234,8 @@ elif selected_house:
     )
 
     if st.button("💾 Save Expenses"):
-        exp_df = pd.concat([edited_exp], ignore_index=True)
+        exp_df = edited_exp.copy()
 
-        # enforce clean values
         exp_df["Status"] = exp_df["Status"].apply(
             lambda x: "Paid" if str(x).lower() == "paid" else "Unpaid"
         )
