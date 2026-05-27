@@ -31,16 +31,21 @@ h1,h2,h3 { color:#e5e7eb; }
 .kpi-value { font-size:22px; font-weight:700; color:#fff; }
 
 hr { border:1px solid #1f2937; }
-
 </style>
 """, unsafe_allow_html=True)
 
 # =========================
-# LOAD
+# LOAD DATA
 # =========================
 df = load_data()
 exp_df = load_expenses()
 today = datetime.today()
+
+if df is None:
+    df = pd.DataFrame()
+
+if exp_df is None:
+    exp_df = pd.DataFrame()
 
 if "House" not in df.columns:
     df["House"] = ""
@@ -65,6 +70,7 @@ if not df.empty:
 # LOGIN
 # =========================
 st.sidebar.title("🏢 Sublet SaaS Pro MAX")
+
 user = st.sidebar.text_input("User")
 pw = st.sidebar.text_input("Pass", type="password")
 
@@ -72,7 +78,7 @@ if user != "admin" or pw != "admin123":
     st.stop()
 
 # =========================
-# HOUSE SYSTEM (DYNAMIC)
+# DEFAULT HOUSES
 # =========================
 default_houses = [
     "BSS",
@@ -88,22 +94,47 @@ default_houses = [
 existing_houses = df["House"].dropna().unique().tolist()
 houses = sorted(list(set(default_houses + existing_houses)))
 
-# ADD HOUSE
+# =========================
+# ADD HOUSE (REAL SAVE)
+# =========================
 st.sidebar.markdown("### 🏘️ Houses")
+
 new_house = st.sidebar.text_input("Add new house")
+
 if st.sidebar.button("➕ Add House"):
     if new_house:
-        houses.append(new_house)
-        st.sidebar.success("House added (UI only)")
+        if new_house not in houses:
+            houses.append(new_house)
 
-# TREE NAVIGATION (Notion style)
-page = st.sidebar.radio("Navigation", ["Dashboard", "Tenant", "Expenses", "Reports"] + houses)
+        # add dummy row so house exists in DB
+        new_row = pd.DataFrame([{
+            "TenantID": "",
+            "Name": "",
+            "House": new_house,
+            "Room": "",
+            "Rental": 0,
+            "DueDate": today,
+            "Status": "Unpaid"
+        }])
+
+        df = pd.concat([df, new_row], ignore_index=True)
+        save_data(df)
+
+        st.sidebar.success("House added")
 
 # =========================
-# FILTER BY HOUSE PAGE
+# NAVIGATION
 # =========================
+page = st.sidebar.radio(
+    "Navigation",
+    ["Dashboard", "Tenant", "Expenses", "Reports"] + houses
+)
+
 selected_house = page if page in houses else None
 
+# =========================
+# FILTER DATA
+# =========================
 if selected_house:
     df_view = df[df["House"] == selected_house].copy()
     exp_view = exp_df[exp_df["House"] == selected_house].copy()
@@ -117,7 +148,7 @@ if not df_view.empty:
 # =========================
 # KPI
 # =========================
-def kpi(label,value):
+def kpi(label, value):
     st.markdown(f"""
     <div class="kpi">
         <div style="color:#94a3b8;font-size:12px">{label}</div>
@@ -131,8 +162,8 @@ def kpi(label,value):
 if page == "Dashboard":
     st.title("🏠 Dashboard")
 
-    total_income = df_view["Rental"].sum() if not df_view.empty else 0
-    expenses = exp_view["Amount"].sum() if not exp_view.empty else 0
+    total_income = df["Rental"].sum() if not df.empty else 0
+    expenses = exp_df["Amount"].sum() if not exp_df.empty else 0
 
     c1,c2,c3 = st.columns(3)
     kpi("Income", f"RM {total_income:,.0f}")
@@ -140,10 +171,8 @@ if page == "Dashboard":
     kpi("Profit", f"RM {total_income-expenses:,.0f}")
 
     st.markdown("---")
-
     st.subheader("🏘️ House Overview")
-    if not df.empty:
-        st.dataframe(df, use_container_width=True)
+    st.dataframe(df, use_container_width=True)
 
 # =========================
 # HOUSE PAGE (NOTION STYLE)
@@ -153,29 +182,34 @@ elif selected_house:
 
     st.subheader("👥 Tenants (Inline Edit)")
 
-    edited = st.data_editor(
+    edited_df = st.data_editor(
         df_view,
         num_rows="dynamic",
-        use_container_width=True
+        use_container_width=True,
+        key="tenant_editor"
     )
 
     if st.button("💾 Save Tenant Changes"):
-        df.update(edited)
+        # replace only house rows
+        df = df[df["House"] != selected_house]
+        df = pd.concat([df, edited_df], ignore_index=True)
         save_data(df)
         st.success("Saved")
 
     st.markdown("---")
 
-    st.subheader("💸 Expenses")
+    st.subheader("💸 Expenses (Inline Edit)")
 
     edited_exp = st.data_editor(
         exp_view,
         num_rows="dynamic",
-        use_container_width=True
+        use_container_width=True,
+        key="expense_editor"
     )
 
     if st.button("💾 Save Expense Changes"):
-        exp_df.update(edited_exp)
+        exp_df = exp_df[exp_df["House"] != selected_house]
+        exp_df = pd.concat([exp_df, edited_exp], ignore_index=True)
         save_expenses(exp_df)
         st.success("Saved")
 
@@ -184,7 +218,6 @@ elif selected_house:
 # =========================
 elif page == "Tenant":
     st.title("👥 All Tenants")
-
     st.data_editor(df, num_rows="dynamic", use_container_width=True)
 
 # =========================
@@ -192,7 +225,6 @@ elif page == "Tenant":
 # =========================
 elif page == "Expenses":
     st.title("💸 Expenses")
-
     st.data_editor(exp_df, num_rows="dynamic", use_container_width=True)
 
 # =========================
