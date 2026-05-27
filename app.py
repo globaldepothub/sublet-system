@@ -50,13 +50,12 @@ if exp_df is None:
 df = df.drop(columns=["TenantID"], errors="ignore")
 
 # =========================
-# ENSURE HOUSE IN EXPENSES (IMPORTANT FIX)
+# SAFE NUMERIC FIX (CRITICAL)
 # =========================
-if "House" not in exp_df.columns:
-    exp_df["House"] = ""
+df["Rental"] = pd.to_numeric(df.get("Rental", 0), errors="coerce").fillna(0)
 
 # =========================
-# CLEAN EXPENSES
+# EXPENSE CLEAN (HOUSE IS KEY FIX)
 # =========================
 def clean_expenses(df_in):
     df = df_in.copy()
@@ -120,7 +119,7 @@ if page == "Houses":
     selected_house = st.sidebar.selectbox("Select House", houses)
 
 # =========================
-# FILTER
+# FILTER DATA
 # =========================
 if selected_house:
     df_view = df[df["House"] == selected_house].copy()
@@ -128,6 +127,15 @@ if selected_house:
 else:
     df_view = df.copy()
     exp_view = exp_df.copy()
+
+# =========================
+# KPI SAFE FIX
+# =========================
+def safe_float(x):
+    try:
+        return float(x)
+    except:
+        return 0.0
 
 # =========================
 # KPI
@@ -146,13 +154,14 @@ def kpi(label, value):
 if page == "Dashboard":
     st.title("🏠 Dashboard")
 
-    income = df["Rental"].sum() if not df.empty else 0
-    expense = exp_df["Amount"].sum() if not exp_df.empty else 0
+    income = safe_float(df["Rental"].sum())
+    expense = safe_float(exp_df["Amount"].sum())
+    profit = income - expense
 
     c1,c2,c3 = st.columns(3)
     kpi("Income", f"RM {income:,.0f}")
     kpi("Expenses", f"RM {expense:,.0f}")
-    kpi("Profit", f"RM {income-expense:,.0f}")
+    kpi("Profit", f"RM {profit:,.0f}")
 
     st.markdown("---")
     st.dataframe(df, use_container_width=True)
@@ -192,9 +201,6 @@ elif selected_house:
 
     st.markdown("---")
 
-    # =========================
-    # EXPENSES FIXED (CORE ISSUE RESOLVED)
-    # =========================
     st.subheader("💸 Expenses")
 
     CATEGORY_OPTIONS = [
@@ -221,7 +227,7 @@ elif selected_house:
     )
 
     if st.button("💾 Save Expenses"):
-        edited_exp["House"] = selected_house   # 🔥 CRITICAL FIX
+        edited_exp["House"] = selected_house   # 🔥 IMPORTANT FIX
 
         exp_all = exp_df[exp_df["House"] != selected_house]
         exp_all = pd.concat([exp_all, edited_exp], ignore_index=True)
@@ -236,5 +242,18 @@ elif selected_house:
 elif page == "Reports":
     st.title("📊 Reports")
 
+    st.subheader("👥 Tenants Report")
     st.dataframe(df, use_container_width=True)
+
+    st.subheader("💸 Expenses Report")
     st.dataframe(exp_df, use_container_width=True)
+
+    st.subheader("📊 Summary")
+
+    income = safe_float(df["Rental"].sum())
+    expense = safe_float(exp_df["Amount"].sum())
+    profit = income - expense
+
+    st.metric("Income", f"RM {income:,.0f}")
+    st.metric("Expenses", f"RM {expense:,.0f}")
+    st.metric("Profit", f"RM {profit:,.0f}")
