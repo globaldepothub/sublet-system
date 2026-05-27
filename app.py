@@ -58,9 +58,9 @@ def status(row):
             return "Paid"
         elif pd.to_datetime(row["DueDate"]) < today:
             return "Overdue"
-        return "Pending"
+        return "Unpaid"
     except:
-        return "Pending"
+        return "Unpaid"
 
 if not df.empty:
     df["PaymentStatus"] = df.apply(status, axis=1)
@@ -93,7 +93,7 @@ default_houses = [
 houses = sorted(list(set(default_houses + df["House"].dropna().unique().tolist())))
 
 # =========================
-# SIDEBAR NAV (FIXED)
+# NAVIGATION
 # =========================
 menu = st.sidebar.radio("Navigation", ["Dashboard", "Reports", "Houses"])
 
@@ -155,12 +155,22 @@ elif selected_house:
         df_view,
         num_rows="dynamic",
         use_container_width=True,
-        key="tenant_editor"
+        key="tenant_editor",
+        column_config={
+            "Status": st.column_config.SelectboxColumn(
+                "Status",
+                options=["Paid", "Unpaid"],
+                required=True
+            )
+        }
     )
 
     if st.button("💾 Save Tenant Changes"):
         df = df[df["House"] != selected_house]
         df = pd.concat([df, edited_df], ignore_index=True)
+
+        df["Status"] = df["Status"].apply(lambda x: "Paid" if str(x).lower()=="paid" else "Unpaid")
+
         save_data(df)
         st.success("Saved")
         st.rerun()
