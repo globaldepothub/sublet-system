@@ -77,7 +77,7 @@ if user != "admin" or pw != "admin123":
     st.stop()
 
 # =========================
-# HOUSE DATA
+# HOUSE LIST
 # =========================
 default_houses = [
     "BSS",
@@ -93,7 +93,7 @@ default_houses = [
 houses = sorted(list(set(default_houses + df["House"].dropna().unique().tolist())))
 
 # =========================
-# NAVIGATION
+# NAVIGATION (CLEAN)
 # =========================
 menu = st.sidebar.radio("Navigation", ["Dashboard", "Reports", "Houses"])
 
@@ -149,10 +149,15 @@ if menu == "Dashboard":
 elif selected_house:
     st.title(f"🏘️ {selected_house}")
 
-    st.subheader("👥 Tenants (Inline Edit)")
+    # =========================
+    # TENANTS (NO HOUSE COLUMN)
+    # =========================
+    st.subheader("👥 Tenants")
+
+    df_clean = df_view.drop(columns=["House"], errors="ignore")
 
     edited_df = st.data_editor(
-        df_view,
+        df_clean,
         num_rows="dynamic",
         use_container_width=True,
         key="tenant_editor",
@@ -166,10 +171,14 @@ elif selected_house:
     )
 
     if st.button("💾 Save Tenant Changes"):
+        edited_df["House"] = selected_house
+
         df = df[df["House"] != selected_house]
         df = pd.concat([df, edited_df], ignore_index=True)
 
-        df["Status"] = df["Status"].apply(lambda x: "Paid" if str(x).lower()=="paid" else "Unpaid")
+        df["Status"] = df["Status"].apply(
+            lambda x: "Paid" if str(x).lower() == "paid" else "Unpaid"
+        )
 
         save_data(df)
         st.success("Saved")
@@ -177,7 +186,10 @@ elif selected_house:
 
     st.markdown("---")
 
-    st.subheader("💸 Expenses (Inline Edit)")
+    # =========================
+    # EXPENSES
+    # =========================
+    st.subheader("💸 Expenses")
 
     edited_exp = st.data_editor(
         exp_view,
@@ -189,6 +201,7 @@ elif selected_house:
     if st.button("💾 Save Expense Changes"):
         exp_df = exp_df[exp_df["House"] != selected_house]
         exp_df = pd.concat([exp_df, edited_exp], ignore_index=True)
+
         save_expenses(exp_df)
         st.success("Saved")
         st.rerun()
