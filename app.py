@@ -6,65 +6,69 @@ from db import load_data, save_data, load_expenses, save_expenses
 st.set_page_config(page_title="Sublet SaaS Pro", layout="wide")
 
 # =========================
-# SAAS UI STYLE
+# PREMIUM SAAS STYLE
 # =========================
 st.markdown("""
 <style>
 
 /* Background */
 .main {
-    background-color: #0b1220;
+    background: #0a0f1c;
 }
 
-/* Hide Streamlit default padding */
+/* Layout padding */
 .block-container {
-    padding: 2rem 2.5rem;
+    padding: 1.8rem 2.2rem;
 }
 
 /* Sidebar */
 section[data-testid="stSidebar"] {
-    background: #0f172a;
+    background: #0b1220;
+    border-right: 1px solid #1f2937;
 }
 
-/* Titles */
+/* Text */
 h1, h2, h3 {
-    color: #e2e8f0;
-}
-
-/* Card */
-.saas-card {
-    background: #111827;
-    padding: 18px;
-    border-radius: 16px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    border: 1px solid #1f2937;
+    color: #e5e7eb;
 }
 
 /* KPI Card */
 .kpi {
-    background: linear-gradient(135deg, #111827, #0f172a);
-    padding: 18px;
-    border-radius: 16px;
+    background: linear-gradient(145deg, #0f172a, #0b1220);
     border: 1px solid #1f2937;
+    border-radius: 16px;
+    padding: 16px;
     text-align: center;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.25);
 }
 
-/* KPI label */
+/* KPI hover */
+.kpi:hover {
+    transform: translateY(-2px);
+    transition: 0.2s ease;
+}
+
+/* KPI text */
 .kpi-label {
-    font-size: 13px;
+    font-size: 12px;
     color: #94a3b8;
 }
 
-/* KPI value */
 .kpi-value {
     font-size: 22px;
     font-weight: 700;
     color: #f8fafc;
 }
 
-/* Divider */
+/* Section divider */
 hr {
     border: 1px solid #1f2937;
+}
+
+/* Table radius */
+div[data-testid="stDataFrame"] {
+    border-radius: 12px;
+    overflow: hidden;
 }
 
 </style>
@@ -78,7 +82,7 @@ exp_df = load_expenses()
 today = datetime.today()
 
 # =========================
-# STATUS ENGINE
+# SAFE STATUS ENGINE
 # =========================
 def status(row):
     try:
@@ -96,7 +100,8 @@ if not df.empty:
 # =========================
 # LOGIN
 # =========================
-st.sidebar.markdown("## 🔐 Admin Panel")
+st.sidebar.markdown("## 🏢 Sublet SaaS Pro")
+st.sidebar.caption("Admin Dashboard")
 
 user = st.sidebar.text_input("Username")
 pw = st.sidebar.text_input("Password", type="password")
@@ -107,18 +112,15 @@ if user != "admin" or pw != "admin123":
 st.sidebar.markdown("---")
 
 # =========================
-# MENU
+# NAVIGATION
 # =========================
 menu = st.sidebar.radio("Navigation", [
-    "🏠 Dashboard",
-    "👥 Tenant",
-    "💸 Expenses",
-    "📊 Reports"
+    "Dashboard",
+    "Tenant",
+    "Expenses",
+    "Reports"
 ])
 
-# =========================
-# FILTER
-# =========================
 houses = df["House"].dropna().unique().tolist() if not df.empty else []
 house_filter = st.sidebar.multiselect("Filter House", houses)
 
@@ -133,7 +135,7 @@ if not df_view.empty:
     df_view["PaymentStatus"] = df_view.apply(status, axis=1)
 
 # =========================
-# KPI CARD FUNCTION
+# KPI COMPONENT
 # =========================
 def kpi(label, value):
     st.markdown(f"""
@@ -146,70 +148,71 @@ def kpi(label, value):
 # =========================
 # DASHBOARD
 # =========================
-if menu == "🏠 Dashboard":
+if menu == "Dashboard":
 
-    st.title("🏢 Sublet SaaS Dashboard")
+    st.title("🏠 Dashboard")
+    st.caption("Overview of rental performance, expenses and profit")
 
     total_income = df_view["Rental"].sum() if not df_view.empty else 0
     collected = df_view[df_view["Status"] == "Paid"]["Rental"].sum() if not df_view.empty else 0
     expenses = exp_view["Amount"].sum() if not exp_view.empty else 0
     profit = total_income - expenses
 
-    col1, col2, col3, col4 = st.columns(4)
+    # KPI ROW
+    c1, c2, c3, c4 = st.columns(4)
 
-    with col1:
-        kpi("Income", f"RM {total_income:,.2f}")
-    with col2:
-        kpi("Collected", f"RM {collected:,.2f}")
-    with col3:
-        kpi("Expenses", f"RM {expenses:,.2f}")
-    with col4:
-        kpi("Net Profit", f"RM {profit:,.2f}")
-
-    st.markdown("<hr>", unsafe_allow_html=True)
-
-    # =========================
-    # CHART
-    # =========================
-    st.subheader("📊 Profit Analytics")
-
-    if not df_view.empty:
-
-        income_by_house = df_view.groupby("House")["Rental"].sum()
-        expense_by_house = exp_view.groupby("House")["Amount"].sum() if not exp_view.empty else pd.Series(dtype=float)
-
-        chart_df = pd.DataFrame({
-            "Income": income_by_house,
-            "Expenses": expense_by_house
-        }).fillna(0)
-
-        chart_df["Profit"] = chart_df["Income"] - chart_df["Expenses"]
-
-        st.bar_chart(chart_df)
+    with c1:
+        kpi("Income", f"RM {total_income:,.0f}")
+    with c2:
+        kpi("Collected", f"RM {collected:,.0f}")
+    with c3:
+        kpi("Expenses", f"RM {expenses:,.0f}")
+    with c4:
+        kpi("Net Profit", f"RM {profit:,.0f}")
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    # =========================
-    # OVERDUE
-    # =========================
-    st.subheader("🚨 Overdue Alerts")
+    # MAIN GRID
+    left, right = st.columns([2.2, 1])
 
-    overdue = df_view[df_view["PaymentStatus"] == "Overdue"] if not df_view.empty else pd.DataFrame()
+    with left:
+        st.subheader("📊 Profit Overview")
 
-    if not overdue.empty:
-        st.error(f"{len(overdue)} tenants overdue")
-        st.dataframe(overdue, use_container_width=True)
-    else:
-        st.success("All tenants are up to date")
+        if not df_view.empty:
+            income_by_house = df_view.groupby("House")["Rental"].sum()
+            expense_by_house = exp_view.groupby("House")["Amount"].sum() if not exp_view.empty else pd.Series(dtype=float)
+
+            chart_df = pd.DataFrame({
+                "Income": income_by_house,
+                "Expenses": expense_by_house
+            }).fillna(0)
+
+            chart_df["Profit"] = chart_df["Income"] - chart_df["Expenses"]
+
+            st.bar_chart(chart_df)
+
+        else:
+            st.info("No data available")
+
+    with right:
+        st.subheader("🚨 Overdue")
+
+        overdue = df_view[df_view["PaymentStatus"] == "Overdue"] if not df_view.empty else pd.DataFrame()
+
+        if not overdue.empty:
+            st.error(f"{len(overdue)} overdue tenants")
+            st.dataframe(overdue, use_container_width=True)
+        else:
+            st.success("All clear")
 
 # =========================
 # TENANT
 # =========================
-elif menu == "👥 Tenant":
+elif menu == "Tenant":
 
     st.title("👥 Tenant Management")
 
-    with st.expander("➕ Add Tenant", expanded=False):
+    with st.expander("➕ Add Tenant"):
 
         with st.form("tenant_form"):
             tid = st.text_input("Tenant ID")
@@ -220,9 +223,8 @@ elif menu == "👥 Tenant":
             due = st.date_input("Due Date")
             status_input = st.selectbox("Status", ["Paid", "Unpaid"])
 
-            submit = st.form_submit_button("Save Tenant")
+            if st.form_submit_button("Save"):
 
-            if submit:
                 new = pd.DataFrame([{
                     "TenantID": tid,
                     "Name": name,
@@ -236,22 +238,21 @@ elif menu == "👥 Tenant":
                 df2 = pd.concat([df, new], ignore_index=True)
                 save_data(df2)
 
-                st.success("Tenant added")
+                st.success("Saved")
                 st.rerun()
 
-    st.markdown("### Tenant List")
     st.dataframe(df_view, use_container_width=True)
 
 # =========================
 # EXPENSES
 # =========================
-elif menu == "💸 Expenses":
+elif menu == "Expenses":
 
     st.title("💸 Expenses Tracker")
 
-    with st.expander("➕ Add Expense", expanded=False):
+    with st.expander("➕ Add Expense"):
 
-        with st.form("exp_form"):
+        with st.form("expense_form"):
             date = st.date_input("Date")
             house = st.text_input("House")
             category = st.selectbox("Category", [
@@ -260,9 +261,8 @@ elif menu == "💸 Expenses":
             desc = st.text_input("Description")
             amount = st.number_input("Amount", min_value=0.0)
 
-            submit = st.form_submit_button("Save Expense")
+            if st.form_submit_button("Save"):
 
-            if submit:
                 new = pd.DataFrame([{
                     "Date": date,
                     "House": house,
@@ -274,50 +274,50 @@ elif menu == "💸 Expenses":
                 exp2 = pd.concat([exp_df, new], ignore_index=True)
                 save_expenses(exp2)
 
-                st.success("Expense added")
+                st.success("Saved")
                 st.rerun()
 
-    st.markdown("### Expense Data")
     st.dataframe(exp_view, use_container_width=True)
 
-    st.subheader("📊 Category Breakdown")
+    st.subheader("📊 Breakdown")
+
     if not exp_view.empty:
         st.bar_chart(exp_view.groupby("Category")["Amount"].sum())
 
 # =========================
-# REPORTS
+# REPORTS (SAAS STYLE TABS)
 # =========================
-elif menu == "📊 Reports":
+elif menu == "Reports":
 
-    st.title("📊 Monthly Reports")
+    st.title("📊 Reports")
 
     if not df.empty:
-        month_list = pd.to_datetime(df["DueDate"]).dt.month.dropna().unique().tolist()
+        month_list = pd.to_datetime(df["DueDate"], errors="coerce").dt.month.dropna().unique().tolist()
         month = st.selectbox("Select Month", sorted(month_list))
     else:
         month = None
 
     if month:
 
-        monthly_df = df[pd.to_datetime(df["DueDate"]).dt.month == month]
-        monthly_exp = exp_df[pd.to_datetime(exp_df["Date"]).dt.month == month] if not exp_df.empty else pd.DataFrame()
+        monthly_df = df[pd.to_datetime(df["DueDate"], errors="coerce").dt.month == month]
+        monthly_exp = exp_df[pd.to_datetime(exp_df["Date"], errors="coerce").dt.month == month] if not exp_df.empty else pd.DataFrame()
 
         income = monthly_df["Rental"].sum()
         expense = monthly_exp["Amount"].sum() if not monthly_exp.empty else 0
 
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            kpi("Income", f"RM {income:,.2f}")
-        with col2:
-            kpi("Expenses", f"RM {expense:,.2f}")
-        with col3:
-            kpi("Profit", f"RM {(income - expense):,.2f}")
+        c1, c2, c3 = st.columns(3)
+
+        kpi("Income", f"RM {income:,.0f}")
+        kpi("Expenses", f"RM {expense:,.0f}")
+        kpi("Profit", f"RM {income-expense:,.0f}")
 
         st.markdown("<hr>", unsafe_allow_html=True)
 
-        st.subheader("Tenant Report")
-        st.dataframe(monthly_df, use_container_width=True)
+        tab1, tab2 = st.tabs(["Tenant Report", "Expense Breakdown"])
 
-        st.subheader("Expense Breakdown")
-        if not monthly_exp.empty:
-            st.bar_chart(monthly_exp.groupby("Category")["Amount"].sum())
+        with tab1:
+            st.dataframe(monthly_df, use_container_width=True)
+
+        with tab2:
+            if not monthly_exp.empty:
+                st.bar_chart(monthly_exp.groupby("Category")["Amount"].sum())
