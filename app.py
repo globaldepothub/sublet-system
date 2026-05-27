@@ -6,12 +6,12 @@ from db import load_data, save_data, load_expenses, save_expenses
 st.set_page_config(page_title="Sublet SaaS Pro MAX", layout="wide")
 
 # =========================
-# STYLE
+# MOBILE-FIRST STYLE
 # =========================
 st.markdown("""
 <style>
 .main { background: #0a0f1c; }
-.block-container { padding: 1.8rem 2.2rem; }
+.block-container { padding: 1rem 1rem; }
 
 section[data-testid="stSidebar"] {
     background: #0b1220;
@@ -23,12 +23,12 @@ h1,h2,h3 { color:#e5e7eb; }
 .kpi {
     background: linear-gradient(145deg,#0f172a,#0b1220);
     border: 1px solid #1f2937;
-    border-radius: 16px;
-    padding: 16px;
+    border-radius: 14px;
+    padding: 12px;
     text-align: center;
 }
 
-.kpi-value { font-size:22px; font-weight:700; color:#fff; }
+.kpi-value { font-size:20px; font-weight:700; color:#fff; }
 
 hr { border:1px solid #1f2937; }
 </style>
@@ -68,7 +68,7 @@ if not df.empty:
 # =========================
 # LOGIN
 # =========================
-st.sidebar.title("🏢 Sublet SaaS Pro MAX")
+st.sidebar.title("🏢 SaaS MAX")
 
 user = st.sidebar.text_input("User")
 pw = st.sidebar.text_input("Pass", type="password")
@@ -77,7 +77,7 @@ if user != "admin" or pw != "admin123":
     st.stop()
 
 # =========================
-# HOUSE LIST
+# HOUSE SYSTEM (MOBILE STYLE)
 # =========================
 default_houses = [
     "BSS",
@@ -90,16 +90,19 @@ default_houses = [
     "ALAM SANJUNG A-16-11"
 ]
 
-houses = sorted(list(set(default_houses + df["House"].dropna().unique().tolist())))
+houses = sorted(list(set(default_houses + df["House"].dropna().tolist())))
 
 # =========================
-# NAVIGATION (CLEAN)
+# NAVIGATION (CLEAN MOBILE STYLE)
 # =========================
-menu = st.sidebar.radio("Navigation", ["Dashboard", "Reports", "Houses"])
+page = st.sidebar.selectbox(
+    "Navigation",
+    ["Dashboard", "Reports", "Houses"]
+)
 
 selected_house = None
 
-if menu == "Houses":
+if page == "Houses":
     selected_house = st.sidebar.selectbox("Select House", houses)
 
 # =========================
@@ -121,7 +124,7 @@ if not df_view.empty:
 def kpi(label, value):
     st.markdown(f"""
     <div class="kpi">
-        <div style="color:#94a3b8;font-size:12px">{label}</div>
+        <div style="color:#94a3b8;font-size:11px">{label}</div>
         <div class="kpi-value">{value}</div>
     </div>
     """, unsafe_allow_html=True)
@@ -129,7 +132,7 @@ def kpi(label, value):
 # =========================
 # DASHBOARD
 # =========================
-if menu == "Dashboard":
+if page == "Dashboard":
     st.title("🏠 Dashboard")
 
     income = df["Rental"].sum() if not df.empty else 0
@@ -141,10 +144,11 @@ if menu == "Dashboard":
     kpi("Profit", f"RM {income-expense:,.0f}")
 
     st.markdown("---")
-    st.dataframe(df, use_container_width=True)
+
+    st.dataframe(df, use_container_width=True, height=400)
 
 # =========================
-# HOUSE PAGE (NOTION STYLE)
+# HOUSE PAGE (MOBILE NOTION STYLE)
 # =========================
 elif selected_house:
     st.title(f"🏘️ {selected_house}")
@@ -170,7 +174,7 @@ elif selected_house:
         }
     )
 
-    if st.button("💾 Save Tenant Changes"):
+    if st.button("💾 Save Tenants"):
         edited_df["House"] = selected_house
 
         df = df[df["House"] != selected_house]
@@ -198,7 +202,7 @@ elif selected_house:
         key="expense_editor"
     )
 
-    if st.button("💾 Save Expense Changes"):
+    if st.button("💾 Save Expenses"):
         exp_df = exp_df[exp_df["House"] != selected_house]
         exp_df = pd.concat([exp_df, edited_exp], ignore_index=True)
 
@@ -209,8 +213,8 @@ elif selected_house:
 # =========================
 # REPORTS
 # =========================
-elif menu == "Reports":
+elif page == "Reports":
     st.title("📊 Reports")
 
-    st.dataframe(df)
-    st.dataframe(exp_df)
+    st.dataframe(df, use_container_width=True)
+    st.dataframe(exp_df, use_container_width=True)
