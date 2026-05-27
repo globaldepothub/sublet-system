@@ -27,7 +27,7 @@ def status(row):
         return "Pending"
 
 # =========================
-# ADD PAYMENT STATUS SAFELY
+# ADD PAYMENT STATUS (BASE DF)
 # =========================
 if not df.empty:
     df["PaymentStatus"] = df.apply(status, axis=1)
@@ -59,7 +59,7 @@ houses = df["House"].dropna().unique().tolist() if not df.empty else []
 house_filter = st.sidebar.multiselect("🏘️ Filter House", houses)
 
 # =========================
-# CREATE SAFE VIEW (IMPORTANT FIX)
+# SAFE VIEW (IMPORTANT FIX)
 # =========================
 if house_filter:
     df_view = df[df["House"].isin(house_filter)].copy()
@@ -69,7 +69,7 @@ else:
     exp_view = exp_df.copy()
 
 # =========================
-# REBUILD PaymentStatus FOR VIEW (CRITICAL FIX)
+# REBUILD STATUS FOR VIEW (CRITICAL FIX)
 # =========================
 if not df_view.empty:
     df_view["PaymentStatus"] = df_view.apply(status, axis=1)
@@ -82,7 +82,7 @@ if menu == "🏠 Dashboard":
     st.title("🏢 Sublet SaaS Pro Dashboard")
 
     total_income = df_view["Rental"].sum() if not df_view.empty else 0
-    collected = df_view[df_view["Status"]=="Paid"]["Rental"].sum() if not df_view.empty else 0
+    collected = df_view[df_view["Status"] == "Paid"]["Rental"].sum() if not df_view.empty else 0
     expenses = exp_view["Amount"].sum() if not exp_view.empty else 0
     profit = total_income - expenses
 
@@ -94,24 +94,34 @@ if menu == "🏠 Dashboard":
 
     st.divider()
 
+    # =========================
+    # PROFIT PER HOUSE
+    # =========================
     st.subheader("📈 Profit Per House")
 
     if not df_view.empty:
+
         income_by_house = df_view.groupby("House")["Rental"].sum()
         expense_by_house = exp_view.groupby("House")["Amount"].sum() if not exp_view.empty else 0
 
         chart_df = pd.DataFrame({
             "Income": income_by_house,
-            "Expenses": exp_view.groupby("House")["Amount"].sum() if not exp_view.empty else 0
+            "Expenses": expense_by_house
         }).fillna(0)
 
         chart_df["Profit"] = chart_df["Income"] - chart_df["Expenses"]
 
-        st.bar_chart(chart_df[["Income","Expenses","Profit"]])
+        st.bar_chart(chart_df[["Income", "Expenses", "Profit"]])
 
+    # =========================
+    # OVERDUE (FIXED - NO KEYERROR)
+    # =========================
     st.subheader("🔔 Overdue Alerts")
 
-    overdue = df_view[df_view.get("PaymentStatus", "") == "Overdue"]
+    if "PaymentStatus" in df_view.columns:
+        overdue = df_view[df_view["PaymentStatus"] == "Overdue"]
+    else:
+        overdue = pd.DataFrame()
 
     if not overdue.empty:
         st.error(f"{len(overdue)} tenants overdue!")
@@ -133,9 +143,10 @@ elif menu == "👥 Tenant":
         room = st.text_input("Room")
         rental = st.number_input("Rental", min_value=0)
         due = st.date_input("Due Date")
-        status_input = st.selectbox("Status", ["Paid","Unpaid"])
+        status_input = st.selectbox("Status", ["Paid", "Unpaid"])
 
         if st.form_submit_button("Add"):
+
             new = pd.DataFrame([{
                 "TenantID": tid,
                 "Name": name,
@@ -165,12 +176,13 @@ elif menu == "💸 Expenses":
         date = st.date_input("Date")
         house = st.text_input("House")
         category = st.selectbox("Category", [
-            "TNB","Air Selangor","WiFi","Coway","IWK","Owner Payment","Other"
+            "TNB", "Air Selangor", "WiFi", "Coway", "IWK", "Owner Payment", "Other"
         ])
         desc = st.text_input("Description")
         amount = st.number_input("Amount", min_value=0)
 
         if st.form_submit_button("Add"):
+
             new = pd.DataFrame([{
                 "Date": date,
                 "House": house,
@@ -222,7 +234,9 @@ elif menu == "📊 Monthly Report":
         if not monthly_exp.empty:
             st.bar_chart(monthly_exp.groupby("Category")["Amount"].sum())
 
-        # Export Excel
+        # =========================
+        # EXPORT EXCEL
+        # =========================
         excel_file = pd.ExcelWriter("monthly_report.xlsx", engine="openpyxl")
 
         monthly_df.to_excel(excel_file, sheet_name="Tenants", index=False)
