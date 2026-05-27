@@ -5,6 +5,9 @@ from db import load_data, save_data, load_expenses, save_expenses
 
 st.set_page_config(page_title="Sublet SaaS Pro", layout="wide")
 
+# =========================
+# LOAD DATA
+# =========================
 df = load_data()
 exp_df = load_expenses()
 
@@ -23,6 +26,9 @@ def status(row):
     except:
         return "Pending"
 
+# =========================
+# ADD PAYMENT STATUS SAFELY
+# =========================
 if not df.empty:
     df["PaymentStatus"] = df.apply(status, axis=1)
 
@@ -47,17 +53,26 @@ menu = st.sidebar.selectbox("📌 Menu", [
 ])
 
 # =========================
-# HOUSE FILTER (GLOBAL)
+# HOUSE FILTER
 # =========================
 houses = df["House"].dropna().unique().tolist() if not df.empty else []
 house_filter = st.sidebar.multiselect("🏘️ Filter House", houses)
 
+# =========================
+# CREATE SAFE VIEW (IMPORTANT FIX)
+# =========================
 if house_filter:
-    df_view = df[df["House"].isin(house_filter)]
-    exp_view = exp_df[exp_df["House"].isin(house_filter)]
+    df_view = df[df["House"].isin(house_filter)].copy()
+    exp_view = exp_df[exp_df["House"].isin(house_filter)].copy()
 else:
-    df_view = df
-    exp_view = exp_df
+    df_view = df.copy()
+    exp_view = exp_df.copy()
+
+# =========================
+# REBUILD PaymentStatus FOR VIEW (CRITICAL FIX)
+# =========================
+if not df_view.empty:
+    df_view["PaymentStatus"] = df_view.apply(status, axis=1)
 
 # =========================
 # DASHBOARD
@@ -79,7 +94,6 @@ if menu == "🏠 Dashboard":
 
     st.divider()
 
-    # 📈 Profit chart per house
     st.subheader("📈 Profit Per House")
 
     if not df_view.empty:
@@ -95,10 +109,10 @@ if menu == "🏠 Dashboard":
 
         st.bar_chart(chart_df[["Income","Expenses","Profit"]])
 
-    # 🔔 Overdue alert
     st.subheader("🔔 Overdue Alerts")
 
-    overdue = df_view[df_view["PaymentStatus"]=="Overdue"]
+    overdue = df_view[df_view.get("PaymentStatus", "") == "Overdue"]
+
     if not overdue.empty:
         st.error(f"{len(overdue)} tenants overdue!")
         st.dataframe(overdue)
@@ -134,6 +148,7 @@ elif menu == "👥 Tenant":
 
             df2 = pd.concat([df, new], ignore_index=True)
             save_data(df2)
+
             st.success("Added")
             st.rerun()
 
@@ -166,12 +181,14 @@ elif menu == "💸 Expenses":
 
             exp2 = pd.concat([exp_df, new], ignore_index=True)
             save_expenses(exp2)
+
             st.success("Added")
             st.rerun()
 
     st.dataframe(exp_view, use_container_width=True)
 
     st.subheader("📊 Breakdown")
+
     if not exp_view.empty:
         st.bar_chart(exp_view.groupby("Category")["Amount"].sum())
 
@@ -182,7 +199,9 @@ elif menu == "📊 Monthly Report":
 
     st.title("📊 Monthly Report")
 
-    month = st.selectbox("Select Month", pd.to_datetime(df["DueDate"]).dt.month.unique() if not df.empty else [])
+    month_list = pd.to_datetime(df["DueDate"]).dt.month.unique() if not df.empty else []
+
+    month = st.selectbox("Select Month", month_list)
 
     if month and not df.empty:
 
@@ -192,24 +211,24 @@ elif menu == "📊 Monthly Report":
         income = monthly_df["Rental"].sum()
         expense = monthly_exp["Amount"].sum() if not monthly_exp.empty else 0
 
-        st.metric("Monthly Income", f"RM {income}")
-        st.metric("Monthly Expenses", f"RM {expense}")
-        st.metric("Monthly Profit", f"RM {income - expense}")
+        st.metric("Income", f"RM {income}")
+        st.metric("Expenses", f"RM {expense}")
+        st.metric("Profit", f"RM {income - expense}")
 
-        st.subheader("Tenant Performance")
+        st.subheader("Tenant Report")
         st.dataframe(monthly_df)
 
         st.subheader("Expenses Breakdown")
         if not monthly_exp.empty:
             st.bar_chart(monthly_exp.groupby("Category")["Amount"].sum())
 
-        # 📄 Export Excel button
-        excel_data = pd.ExcelWriter("monthly_report.xlsx", engine="openpyxl")
+        # Export Excel
+        excel_file = pd.ExcelWriter("monthly_report.xlsx", engine="openpyxl")
 
-        monthly_df.to_excel(excel_data, sheet_name="Tenants", index=False)
-        monthly_exp.to_excel(excel_data, sheet_name="Expenses", index=False)
+        monthly_df.to_excel(excel_file, sheet_name="Tenants", index=False)
+        monthly_exp.to_excel(excel_file, sheet_name="Expenses", index=False)
 
-        excel_data.close()
+        excel_file.close()
 
         with open("monthly_report.xlsx", "rb") as f:
             st.download_button(
