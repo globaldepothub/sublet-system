@@ -6,7 +6,7 @@ from db import load_data, save_data, load_expenses, save_expenses
 st.set_page_config(page_title="Sublet SaaS Pro MAX", layout="wide")
 
 # =========================
-# STYLE
+# STYLE (MOBILE CLEAN)
 # =========================
 st.markdown("""
 <style>
@@ -99,7 +99,6 @@ houses = sorted(list(set(default_houses + df["House"].dropna().tolist())))
 page = st.sidebar.selectbox("Navigation", ["Dashboard", "Reports", "Houses"])
 
 selected_house = None
-
 if page == "Houses":
     selected_house = st.sidebar.selectbox("Select House", houses)
 
@@ -151,11 +150,11 @@ elif selected_house:
     st.title(f"🏘️ {selected_house}")
 
     # =========================
-    # TENANTS
+    # TENANTS (NO Tenant ID + NO House COLUMN)
     # =========================
     st.subheader("👥 Tenants")
 
-    df_clean = df_view.drop(columns=["House"], errors="ignore")
+    df_clean = df_view.drop(columns=["House", "TenantID"], errors="ignore")
 
     edited_df = st.data_editor(
         df_clean,
@@ -188,7 +187,7 @@ elif selected_house:
     st.markdown("---")
 
     # =========================
-    # EXPENSES (CLEAN 3 COLUMNS ONLY)
+    # EXPENSES (STRICT 3 COLUMNS ONLY)
     # =========================
     st.subheader("💸 Expenses")
 
@@ -204,14 +203,16 @@ elif selected_house:
 
     exp_clean = exp_view.copy()
 
-    if "Category" not in exp_clean.columns:
-        exp_clean["Category"] = "OTHER EXPENSES"
-    if "Amount" not in exp_clean.columns:
-        exp_clean["Amount"] = 0
-    if "Status" not in exp_clean.columns:
-        exp_clean["Status"] = "Unpaid"
+    # enforce schema ONLY 3 columns
+    for col in ["Category", "Amount", "Status"]:
+        if col not in exp_clean.columns:
+            if col == "Category":
+                exp_clean[col] = "OTHER EXPENSES"
+            elif col == "Amount":
+                exp_clean[col] = 0
+            elif col == "Status":
+                exp_clean[col] = "Unpaid"
 
-    # FORCE ONLY 3 COLUMNS
     exp_clean = exp_clean[["Category", "Amount", "Status"]]
 
     edited_exp = st.data_editor(
@@ -250,5 +251,8 @@ elif selected_house:
 elif page == "Reports":
     st.title("📊 Reports")
 
-    st.dataframe(df, use_container_width=True)
+    # REMOVE TenantID everywhere
+    df_report = df.drop(columns=["TenantID"], errors="ignore")
+
+    st.dataframe(df_report, use_container_width=True)
     st.dataframe(exp_df, use_container_width=True)
