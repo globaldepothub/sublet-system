@@ -6,12 +6,12 @@ from db import load_data, save_data, load_expenses, save_expenses
 st.set_page_config(page_title="Sublet SaaS Pro MAX", layout="wide")
 
 # =========================
-# MOBILE UI STYLE
+# MOBILE-FIRST STYLE
 # =========================
 st.markdown("""
 <style>
 .main { background: #0a0f1c; }
-.block-container { padding: 1rem; }
+.block-container { padding: 1rem 1rem; }
 
 section[data-testid="stSidebar"] {
     background: #0b1220;
@@ -28,11 +28,7 @@ h1,h2,h3 { color:#e5e7eb; }
     text-align: center;
 }
 
-.kpi-value {
-    font-size:20px;
-    font-weight:700;
-    color:#fff;
-}
+.kpi-value { font-size:20px; font-weight:700; color:#fff; }
 
 hr { border:1px solid #1f2937; }
 </style>
@@ -47,7 +43,6 @@ today = datetime.today()
 
 if df is None:
     df = pd.DataFrame()
-
 if exp_df is None:
     exp_df = pd.DataFrame()
 
@@ -103,6 +98,7 @@ houses = sorted(list(set(default_houses + df["House"].dropna().tolist())))
 page = st.sidebar.selectbox("Navigation", ["Dashboard", "Reports", "Houses"])
 
 selected_house = None
+
 if page == "Houses":
     selected_house = st.sidebar.selectbox("Select House", houses)
 
@@ -111,7 +107,7 @@ if page == "Houses":
 # =========================
 if selected_house:
     df_view = df[df["House"] == selected_house].copy()
-    exp_view = exp_df[exp_df["House"] == selected_house].copy()
+    exp_view = exp_df.copy()   # 👈 IMPORTANT: expenses NOT filtered by house anymore
 else:
     df_view = df.copy()
     exp_view = exp_df.copy()
@@ -145,16 +141,16 @@ if page == "Dashboard":
     kpi("Profit", f"RM {income-expense:,.0f}")
 
     st.markdown("---")
-    st.dataframe(df, use_container_width=True, height=400)
+    st.dataframe(df, use_container_width=True)
 
 # =========================
-# HOUSE PAGE (TENANTS + EXPENSES)
+# HOUSE PAGE
 # =========================
 elif selected_house:
     st.title(f"🏘️ {selected_house}")
 
     # =========================
-    # TENANTS (NO HOUSE COLUMN)
+    # TENANTS
     # =========================
     st.subheader("👥 Tenants")
 
@@ -191,7 +187,7 @@ elif selected_house:
     st.markdown("---")
 
     # =========================
-    # EXPENSES (UPDATED STRUCTURE)
+    # EXPENSES (UPDATED)
     # =========================
     st.subheader("💸 Expenses")
 
@@ -205,8 +201,10 @@ elif selected_house:
         "OTHER EXPENSES"
     ]
 
-    if exp_view.empty:
-        exp_view = pd.DataFrame(columns=["Category", "Amount", "Status", "House"])
+    # enforce clean schema
+    if not exp_view.empty:
+        if "Status" not in exp_view.columns:
+            exp_view["Status"] = "Unpaid"
 
     edited_exp = st.data_editor(
         exp_view,
@@ -221,17 +219,19 @@ elif selected_house:
             ),
             "Status": st.column_config.SelectboxColumn(
                 "Status",
-                options=["PAID", "UNPAID"],
+                options=["Paid", "Unpaid"],
                 required=True
             )
         }
     )
 
     if st.button("💾 Save Expenses"):
-        edited_exp["House"] = selected_house
+        exp_df = pd.concat([edited_exp], ignore_index=True)
 
-        exp_df = exp_df[exp_df["House"] != selected_house]
-        exp_df = pd.concat([exp_df, edited_exp], ignore_index=True)
+        # enforce clean values
+        exp_df["Status"] = exp_df["Status"].apply(
+            lambda x: "Paid" if str(x).lower() == "paid" else "Unpaid"
+        )
 
         save_expenses(exp_df)
         st.success("Saved")
