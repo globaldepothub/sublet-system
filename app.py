@@ -43,7 +43,6 @@ today = datetime.today()
 
 if df is None:
     df = pd.DataFrame()
-
 if exp_df is None:
     exp_df = pd.DataFrame()
 
@@ -78,7 +77,7 @@ if user != "admin" or pw != "admin123":
     st.stop()
 
 # =========================
-# DEFAULT HOUSES
+# HOUSE DATA
 # =========================
 default_houses = [
     "BSS",
@@ -91,46 +90,17 @@ default_houses = [
     "ALAM SANJUNG A-16-11"
 ]
 
-existing_houses = df["House"].dropna().unique().tolist()
-houses = sorted(list(set(default_houses + existing_houses)))
+houses = sorted(list(set(default_houses + df["House"].dropna().unique().tolist())))
 
 # =========================
-# ADD HOUSE (REAL SAVE)
+# SIDEBAR NAV (FIXED)
 # =========================
-st.sidebar.markdown("### 🏘️ Houses")
+menu = st.sidebar.radio("Navigation", ["Dashboard", "Reports", "Houses"])
 
-new_house = st.sidebar.text_input("Add new house")
+selected_house = None
 
-if st.sidebar.button("➕ Add House"):
-    if new_house:
-        if new_house not in houses:
-            houses.append(new_house)
-
-        # add dummy row so house exists in DB
-        new_row = pd.DataFrame([{
-            "TenantID": "",
-            "Name": "",
-            "House": new_house,
-            "Room": "",
-            "Rental": 0,
-            "DueDate": today,
-            "Status": "Unpaid"
-        }])
-
-        df = pd.concat([df, new_row], ignore_index=True)
-        save_data(df)
-
-        st.sidebar.success("House added")
-
-# =========================
-# NAVIGATION
-# =========================
-page = st.sidebar.radio(
-    "Navigation",
-    ["Dashboard", "Tenant", "Expenses", "Reports"] + houses
-)
-
-selected_house = page if page in houses else None
+if menu == "Houses":
+    selected_house = st.sidebar.selectbox("Select House", houses)
 
 # =========================
 # FILTER DATA
@@ -159,19 +129,18 @@ def kpi(label, value):
 # =========================
 # DASHBOARD
 # =========================
-if page == "Dashboard":
+if menu == "Dashboard":
     st.title("🏠 Dashboard")
 
-    total_income = df["Rental"].sum() if not df.empty else 0
-    expenses = exp_df["Amount"].sum() if not exp_df.empty else 0
+    income = df["Rental"].sum() if not df.empty else 0
+    expense = exp_df["Amount"].sum() if not exp_df.empty else 0
 
     c1,c2,c3 = st.columns(3)
-    kpi("Income", f"RM {total_income:,.0f}")
-    kpi("Expenses", f"RM {expenses:,.0f}")
-    kpi("Profit", f"RM {total_income-expenses:,.0f}")
+    kpi("Income", f"RM {income:,.0f}")
+    kpi("Expenses", f"RM {expense:,.0f}")
+    kpi("Profit", f"RM {income-expense:,.0f}")
 
     st.markdown("---")
-    st.subheader("🏘️ House Overview")
     st.dataframe(df, use_container_width=True)
 
 # =========================
@@ -190,11 +159,11 @@ elif selected_house:
     )
 
     if st.button("💾 Save Tenant Changes"):
-        # replace only house rows
         df = df[df["House"] != selected_house]
         df = pd.concat([df, edited_df], ignore_index=True)
         save_data(df)
         st.success("Saved")
+        st.rerun()
 
     st.markdown("---")
 
@@ -212,25 +181,12 @@ elif selected_house:
         exp_df = pd.concat([exp_df, edited_exp], ignore_index=True)
         save_expenses(exp_df)
         st.success("Saved")
-
-# =========================
-# TENANT PAGE
-# =========================
-elif page == "Tenant":
-    st.title("👥 All Tenants")
-    st.data_editor(df, num_rows="dynamic", use_container_width=True)
-
-# =========================
-# EXPENSES PAGE
-# =========================
-elif page == "Expenses":
-    st.title("💸 Expenses")
-    st.data_editor(exp_df, num_rows="dynamic", use_container_width=True)
+        st.rerun()
 
 # =========================
 # REPORTS
 # =========================
-elif page == "Reports":
+elif menu == "Reports":
     st.title("📊 Reports")
 
     st.dataframe(df)
